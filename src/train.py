@@ -142,6 +142,8 @@ if __name__ == '__main__':
 
     for epoch in range(args.epochs):
         model.train()
+        if hasattr(train_loader.sampler, "set_epoch"):
+            train_loader.sampler.set_epoch(epoch)
         for step, batch in enumerate(tqdm(train_loader)):
             with accelerator.accumulate(model):
                 audio, cls, label, _ = batch
