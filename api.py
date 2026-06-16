@@ -15,11 +15,14 @@ class FlexSED:
         config_path='src/configs/model.yml',
         ckpt_path='ckpts/flexsed_as.pt',
         ckpt_url='https://huggingface.co/Higobeatz/FlexSED/resolve/main/ckpts/flexsed_as.pt',
+        clap_path='models/clap',
+        clap_model_id='laion/clap-htsat-unfused',
         device='cuda'
     ):
         """
         Initialize FlexSED with model, CLAP, and tokenizer loaded once.
         If the checkpoint is not available locally, it will be downloaded automatically.
+        CLAP is saved to clap_path on first download and loaded from there on later runs.
         """
         self.device = device
         params = load_yaml_with_includes(config_path)
@@ -38,10 +41,20 @@ class FlexSED:
         self.model.load_state_dict(state_dict['model'])
         self.model.eval()
 
-        # CLAP text model
-        self.clap = ClapTextModelWithProjection.from_pretrained("laion/clap-htsat-unfused")
+        # CLAP text model (cached locally after first download)
+        clap_config = os.path.join(clap_path, "config.json")
+        if os.path.isfile(clap_config):
+            print(f"[FlexSED] Loading CLAP from {clap_path}")
+            self.clap = ClapTextModelWithProjection.from_pretrained(clap_path, local_files_only=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(clap_path, local_files_only=True)
+        else:
+            print(f"[FlexSED] Downloading CLAP from {clap_model_id} and saving to {clap_path} ...")
+            os.makedirs(clap_path, exist_ok=True)
+            self.clap = ClapTextModelWithProjection.from_pretrained(clap_model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(clap_model_id)
+            self.clap.save_pretrained(clap_path)
+            self.tokenizer.save_pretrained(clap_path)
         self.clap.eval()
-        self.tokenizer = AutoTokenizer.from_pretrained("laion/clap-htsat-unfused")
 
     def split_audio_fixed(self, audio, sr, chunk_duration=10.0):
         samples_per_chunk = int(sr * chunk_duration)
